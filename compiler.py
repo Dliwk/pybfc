@@ -1,39 +1,39 @@
-BF_MPR = '  inc rax\n'
-BF_MPL = '  dec rax\n'
-BF_INC = '  inc byte [rax]\n'
-BF_DEC = '  dec byte [rax]\n'
-BF_OUT = (
+BF_MPR = '  inc rax\n'         # >
+BF_MPL = '  dec rax\n'         # <
+BF_INC = '  inc byte [rax]\n'  # +
+BF_DEC = '  dec byte [rax]\n'  # -
+BF_OUT = (                     # .
     '  lea rbx, [pointer]\n'
     '  mov [rbx], rax\n'
     # '  mov [pointer], rax\n'
     # '  mov rcx, rax\n'
-    '  mov rax, 4\n'
-    '  mov rbx, 1\n'
-    '  mov rcx, [pointer]\n'
-    '  mov rdx, 1\n'
+    '  mov rax, 4\n'           # SYS_WRITE
+    '  mov rbx, 1\n'           # stdout
+    '  mov rcx, [pointer]\n'   # pointer
+    '  mov rdx, 1\n'           # 1 byte
     '  int 80h\n'
     '  mov rax, [pointer]\n'
 )
-BF_INP = (
+BF_INP = (                     # ,
     '  lea rbx, [pointer]\n'
     '  mov [rbx], rax\n'
     # '  mov [pointer], rax\n'
     # '  mov rcx, rax\n'
-    '  mov rax, 3\n'
-    '  mov rbx, 0\n'
-    '  mov rcx, [pointer]\n'
-    '  mov rdx, 1\n'
+    '  mov rax, 3\n'           # SYS_READ
+    '  mov rbx, 0\n'           # stdin
+    '  mov rcx, [pointer]\n'   # pointer
+    '  mov rdx, 1\n'           # 1 byte
     '  int 80h\n'
     '  mov rax, [pointer]\n'
 )
-BF_SOC = (
+BF_SOC = (                     # [
     '\n'
     'cycle_{}_start:\n'
-    '  mov rbx, [rax]\n'
-    '  test rbx, rbx\n'
+    '  mov bl, [rax]\n'
+    '  test bl, bl\n'
     '  je cycle_{}_end\n'
 )
-BF_EOC = (
+BF_EOC = (                     # ]
     '  jmp cycle_{}_start\n'
     'cycle_{}_end:\n'
 )
@@ -49,30 +49,38 @@ def compile(text):
         'global _start\n'
         '\n'
         'section .data\n'
-        'brk:\n'
-        '  dq 0x0000000000000000\n'
-        'pointer:\n'
+        'brk:\n'                         # begin of given memory
+        # '  dq 0x0000000000000000\n'
+        '  times 100000 dq 0x00\n'       # allocate memory
+        'pointer:\n'                     # backup place for our main pointer (which is usually rax)
         '  dq 0x0000000000000000\n'
         '\n'
         'section .text\n'
         '_start:\n'
-        '  mov rax, 45\n'
-        '  mov rbx, brk\n'
-        '  add rbx, 30000\n'
-        '  int 80h\n'
+        # set up pointer (to point on the middle of allocated memory)
+        '  mov qword rax, brk\n'
+        '  add rax, 50000'
+        # '  mov rax, 45\n'                # SYS_BRK
+        # '  mov rbx, brk\n'
+        # '  add rbx, 30000\n'
+        # '  int 80h\n'
         # '  mov rax, 19\n'
         # '  mov rbx, 0\n'
         # '  mov rcx, 1\n'
         # '  mov rdx, 0\n'
         # '  int 80h\n'
-        '  mov rax, brk\n'
-        '  add rax, 1000\n'
+        # '  mov rax, brk\n'
+        # '  add rax, 1000\n'
         # '  mov [brk], rax\n'
         '\n'
     )
 
+    newline = True
+    comment = False
     for c in text:
-        if c == '>':
+        if (c == '#' and newline) or comment:
+            comment = True
+        elif c == '>':
             asm += BF_MPR
         elif c == '<':
             asm += BF_MPL
@@ -91,11 +99,17 @@ def compile(text):
         elif c == ']':
             v = cycles.pop()
             asm += BF_EOC.format(v, v)
+
+        if c == '\n':
+            newline = True
+            comment = False
+        else:
+            newline = False
     
     asm += (
         '\n'
-        '  mov rax, 1\n'
-        '  mov rbx, 0\n'
+        '  mov rax, 1\n'         # SYS_EXIT
+        '  mov rbx, 0\n'         # code 0
         '  int 80h\n'
     )
     return asm
